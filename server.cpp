@@ -14,21 +14,75 @@ static void print_message(const char* message){
 
 static void exit_with_message(const char* message){
     int error_number = errno;
-    fprintf(stderr, "[%d] %s", error_number, message);
+    fprintf(stderr, "[%d] %s\n", error_number, message);
     abort();
 }
 
-static void do_something(int connection_file_descriptor){
-    char read_buffer[64] = {};
-    //signed ssize_t used to catch errors
-    ssize_t length = read(connection_file_descriptor, read_buffer, sizeof(read_buffer) - 1);
-    if (length < 0){
-        print_message("read() error..");
+static int32_t read_full(int fd, char *buf, size_t n) {
+    while (n > 0) {
+        ssize_t rv = read(fd, buf, n);
+        if (rv <= 0) {
+            return -1;  // error or End of the file
+        }
+        n -= (size_t)rv;
+        buf += rv;
     }
-    fprintf(stderr, "Client message : %s", read_buffer);
+    return 0;
+}
 
-    char write_buffer[] = "hey we are starting the project\n";
-    write(connection_file_descriptor, write_buffer, strlen(write_buffer));
+static int32_t write_all(int fd, const char *buf, size_t n) {
+    while (n > 0) {
+        ssize_t rv = write(fd, buf, n);
+        if (rv <= 0) {
+            return -1;
+        }
+        n -= (size_t)rv;
+        buf += rv;
+    }
+    return 0;
+}
+const size_t max_msg_len = 4096;
+
+static int32_t one_request(int connfd) {
+    char buffer[4 + max_msg_len];
+
+    // read the 4-byte length
+    errno = 0;
+    if (read_full(connfd, buffer, 4)) {
+        print_message(errno == 0 ? "Client closed connection" : "read error");
+        return -1;
+    }
+
+    uint32_t len = 0;
+    memcpy(&len, buffer, 4);
+
+    if (len > max_msg_len) {
+        print_message("message too large");
+        return -1;
+    }
+
+    //read message body
+    if (read_full(connfd, buffer + 4, len)) {
+        print_message("read error");
+        return -1;
+    }
+
+    //process request
+    fprintf(stderr, "Client says: %.*s\n", len, buffer + 4);
+
+    //send reply
+    const char reply[] = "Hey we are jobless ppl , starting the project (almost in the middle of the vacation)";
+    uint32_t reply_len = strlen(reply);
+
+    if (reply_len > Max_mas_len) {
+        print_message("reply too large");
+        return -1;
+    }
+
+    memcpy(buffer, &reply_len, 4);
+    memcpy(buffer + 4, reply, reply_len);
+
+    return write_all(connfd, buffer, 4 + reply_len);
 }
 
 int main(){
@@ -68,7 +122,12 @@ int main(){
             continue;
         }
 
-        do_something(connection_file_descriptor);
+        while (true) {
+            int32_t err = one_request(connection_file_descriptor);
+            if (err) {
+                break;
+            }
+        }
         close(connection_file_descriptor);
     }
 
