@@ -24,7 +24,7 @@ static int32_t read_full(int fd, char *buf, size_t n) {
         if (rv <= 0) {
             return -1;  // error or End of the file
         }
-        n -= (size_t)rv;
+        n -= static_cast<ssize_t>(rv);
         buf += rv;
     }
     return 0;
@@ -36,7 +36,7 @@ static int32_t write_all(int fd, const char *buf, size_t n) {
         if (rv <= 0) {
             return -1;
         }
-        n -= (size_t)rv;
+        n -= static_cast<ssize_t>(rv);
         buf += rv;
     }
     return 0;
@@ -74,7 +74,7 @@ static int32_t one_request(int connfd) {
     const char reply[] = "Hey we are jobless ppl , starting the project (almost in the middle of the vacation)";
     uint32_t reply_len = strlen(reply);
 
-    if (reply_len > Max_mas_len) {
+    if (reply_len > max_msg_len) {
         print_message("reply too large");
         return -1;
     }
